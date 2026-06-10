@@ -18,7 +18,8 @@ from sqlalchemy import String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from mayhaps import Ok
-from mayhaps.fastapi import HttpErr, HttpPipeline
+from mayhaps.fastapi import HttpPipeline
+from mayhaps.result import DbErrKind
 from mayhaps.sqlalchemy import fetch_by_id, require, require_absent, save
 
 app = FastAPI()
@@ -74,14 +75,24 @@ class RenameRequest:
     name: str
 
 
+# --- reusable steps ----------------------------------------------------------
+
+check_active = require(
+    lambda u: u.is_active,
+    kind=DbErrKind.INVALID,
+    detail="User is deactivated",
+)
+
+
 # --- routes ------------------------------------------------------------------
 
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
+    # DbErr(NOT_FOUND) → 404, DbErr(INVALID) → 422 — no explicit status anywhere
     user = (
         HttpPipeline(user_id)
         .then(fetch_by_id(User, db))
-        .then(require(lambda u: u.is_active, status=422, detail="User is deactivated"))
+        .then(check_active)
         .run()
     )
     return UserOut(id=user.id, name=user.name, email=user.email)
@@ -89,13 +100,12 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
 
 @app.post("/users", response_model=UserOut, status_code=201)
 def register_user(body: RegisterRequest, db: Session = Depends(get_db)) -> UserOut:
+    # require_absent → DbErr(CONFLICT) → 409
+    # save also catches concurrent IntegrityError → DbErr(CONFLICT) → 409
     user = (
         HttpPipeline(body.email)
-        # Reject if the email is already taken
         .then(require_absent(User, db, User.email, detail="Email already registered"))
-        # Build the new User object
         .then(lambda email: Ok(User(name=body.name, email=email, is_active=True)))
-        # Persist — converts IntegrityError to 409 for concurrent races
         .then(save(db, conflict_detail="Email already registered"))
         .run()
     )
@@ -107,7 +117,7 @@ def rename_user(user_id: int, body: RenameRequest, db: Session = Depends(get_db)
     user = (
         HttpPipeline(user_id)
         .then(fetch_by_id(User, db))
-        .then(require(lambda u: u.is_active, status=422, detail="Cannot rename a deactivated user"))
+        .then(check_active)
         .run()
     )
     user.name = body.name

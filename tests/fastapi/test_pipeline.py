@@ -64,6 +64,25 @@ def test_pipeline_raises_correct_status_from_each_step() -> None:
     assert exc_info.value.status_code == 422
 
 
+def test_pipeline_converts_db_err_using_status_map() -> None:
+    from mayhaps.result import DbErr, DbErrKind
+
+    cases = [
+        (DbErrKind.NOT_FOUND, 404),
+        (DbErrKind.CONFLICT, 409),
+        (DbErrKind.PERMISSION_DENIED, 403),
+        (DbErrKind.INVALID, 422),
+    ]
+    for kind, expected_status in cases:
+        def step(x: int, k: DbErrKind = kind) -> DbErr:
+            return DbErr("oops", kind=k)
+
+        with pytest.raises(HTTPException) as exc_info:
+            HttpPipeline(1).then(step).run()
+
+        assert exc_info.value.status_code == expected_status
+
+
 def test_pipeline_threads_different_types() -> None:
     def to_str(x: int) -> Ok[str]: return Ok(str(x))
     def append_bang(x: str) -> Ok[str]: return Ok(x + "!")

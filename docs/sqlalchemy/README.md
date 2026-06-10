@@ -9,67 +9,77 @@ pip install mayhaps[sqlalchemy]
 # For FastAPI routes, also install mayhaps[fastapi]
 ```
 
+## Error kinds
+
+Helpers return `DbErr` — a subclass of `Err` that carries a semantic `kind` instead of an HTTP status code.
+`HttpPipeline` converts `DbErr` to `HTTPException` automatically using sensible defaults:
+
+| `DbErrKind`        | HTTP status |
+|--------------------|-------------|
+| `NOT_FOUND`        | 404         |
+| `CONFLICT`         | 409         |
+| `PERMISSION_DENIED`| 403         |
+| `INVALID`          | 422         |
+
+Steps you write yourself can return `HttpErr` directly when you need a specific status that doesn't fit a semantic kind.
+
 ## Helpers
 
-Each helper is a step factory — it returns a callable that accepts the current pipeline value and returns `Ok[T] | HttpErr`.
+Each helper is a step factory — it returns a callable that accepts the current pipeline value and returns `Ok[T] | DbErr`.
 
 ### `fetch_by_id`
 
-Look up a row by primary key. Returns `HttpErr(status=404)` if not found.
+Look up a row by primary key. Returns `DbErr(kind=NOT_FOUND)` if not found.
 
 ```python
 from mayhaps.sqlalchemy import fetch_by_id
 
-def get_user(user_id: int, db: Session):
-    return HttpPipeline(user_id).then(fetch_by_id(User, db)).run()
+HttpPipeline(user_id).then(fetch_by_id(User, db)).run()
 ```
 
-Optional kwargs: `status` (default 404), `detail` (default `"{ModelName} not found"`).
+Optional kwarg: `detail` (default `"{ModelName} not found"`).
 
 ### `fetch_by`
 
-Look up a row by any column. Returns `HttpErr(status=404)` if not found.
+Look up a row by any column. Returns `DbErr(kind=NOT_FOUND)` if not found.
 
 ```python
 from mayhaps.sqlalchemy import fetch_by
 
-def login(email: str, db: Session):
-    return HttpPipeline(email).then(fetch_by(User, db, User.email)).run()
+HttpPipeline(email).then(fetch_by(User, db, User.email)).run()
 ```
 
-Optional kwargs: `status`, `detail`.
+Optional kwarg: `detail`.
 
 ### `require`
 
-Guard step: pass through if a predicate holds, otherwise short-circuit with `HttpErr`.
+Guard step: pass through if a predicate holds, otherwise short-circuit with `DbErr`.
 
 ```python
+from mayhaps.result import DbErrKind
 from mayhaps.sqlalchemy import require
 
-check_active = require(lambda u: u.is_active, status=422, detail="User is deactivated")
-check_admin  = require(lambda u: u.role == "admin", status=403, detail="Forbidden")
+check_active = require(lambda u: u.is_active,    kind=DbErrKind.INVALID,           detail="User is deactivated")
+check_admin  = require(lambda u: u.role == "admin", kind=DbErrKind.PERMISSION_DENIED, detail="Admin only")
 ```
 
 ### `require_absent`
 
-Uniqueness check: pass through if no row matches `column == value`, otherwise short-circuit with `HttpErr(status=409)`.
+Uniqueness check: pass through if no row matches `column == value`, otherwise short-circuit with `DbErr(kind=CONFLICT)`.
 
 ```python
 from mayhaps.sqlalchemy import require_absent
 
-def register(email: str, db: Session):
-    return (
-        HttpPipeline(email)
-        .then(require_absent(User, db, User.email, detail="Email already registered"))
-        .then(lambda e: Ok(User(email=e, ...)))
-        .then(save(db))
-        .run()
-    )
+HttpPipeline(email)
+    .then(require_absent(User, db, User.email, detail="Email already registered"))
+    .then(lambda e: Ok(User(email=e, ...)))
+    .then(save(db))
+    .run()
 ```
 
 ### `save`
 
-Add the object to the session and flush. Converts `IntegrityError` to `HttpErr(status=409)` so concurrent uniqueness races are handled gracefully.
+Add the object to the session and flush. Converts `IntegrityError` to `DbErr(kind=CONFLICT)` so concurrent uniqueness races are handled gracefully.
 
 ```python
 from mayhaps.sqlalchemy import save
@@ -80,24 +90,26 @@ from mayhaps.sqlalchemy import save
 
 ## Using with core `Pipeline` (scripts)
 
-The helpers work equally well outside of FastAPI. Use `Pipeline` from `mayhaps` and catch `MayhapsError`:
+The helpers work equally well outside of FastAPI. Use `Pipeline` from `mayhaps` and catch `MayhapsError`. The `kind` field is preserved so scripts can branch on it if needed:
 
 ```python
 from mayhaps import MayhapsError, Pipeline
+from mayhaps.result import DbErrKind
 from mayhaps.sqlalchemy import fetch_by_id, require
 
 try:
     user = (
         Pipeline(user_id)
         .then(fetch_by_id(User, db))
-        .then(require(lambda u: u.is_active, status=422, detail="Inactive"))
+        .then(require(lambda u: u.is_active, kind=DbErrKind.INVALID, detail="Inactive"))
         .run()
     )
 except MayhapsError as e:
-    print(f"[{e.status}] {e.detail}")
+    if e.kind == DbErrKind.NOT_FOUND:
+        print("User does not exist")
+    else:
+        print(f"Error: {e.detail}")
 ```
-
-`MayhapsError.status` carries the same status code from `HttpErr`, so scripts can branch on it if useful.
 
 ## Extended example
 

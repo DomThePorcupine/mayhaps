@@ -1,6 +1,6 @@
 from typing import Callable, cast
 
-from .result import Err, HttpErr, MayhapsError, Ok
+from .result import DbErr, Err, HttpErr, MayhapsError, Ok
 
 
 class Pipeline[T]:
@@ -9,7 +9,8 @@ class Pipeline[T]:
 
     def _make_error(self, err: Err) -> Exception:
         status = err.status if isinstance(err, HttpErr) else None
-        return MayhapsError(err.detail, status=status)
+        kind = err.kind if isinstance(err, DbErr) else None
+        return MayhapsError(err.detail, status=status, kind=kind)
 
     def then[U](self, fn: Callable[[T], Ok[U] | Err]) -> "Pipeline[U]":
         if isinstance(self._state, Err):
