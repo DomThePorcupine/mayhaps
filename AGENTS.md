@@ -53,6 +53,12 @@ Run them with:
 uv run pytest tests/
 ```
 
+Before committing, also run pyright to catch type errors:
+
+```
+uv run --with pyright pyright
+```
+
 Keep each test file under 300 lines. If a file approaches that limit, split it by grouping related cases into a new file.
 
 ## Development

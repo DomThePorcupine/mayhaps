@@ -26,8 +26,8 @@ def test_to_str():
 
 
 def test_to_percent():
-    assert compose(85, converters.to_percent) == "85%"
+    assert compose(85, converters.to_percent) == "85%"  # type: ignore[arg-type]
 
 
 def test_to_percent_float():
-    assert compose(99.5, converters.to_percent) == "99.5%"
+    assert compose(99.5, converters.to_percent) == "99.5%"  # type: ignore[arg-type]

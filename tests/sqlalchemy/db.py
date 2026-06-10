@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import pytest
 from sqlalchemy import Boolean, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -26,7 +28,7 @@ class Post(Base):
 
 
 @pytest.fixture
-def session() -> Session:
+def session() -> Iterator[Session]:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as sess:

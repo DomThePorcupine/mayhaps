@@ -16,14 +16,14 @@ class Pipeline[T]:
         if isinstance(self._state, Err):
             return cast("Pipeline[U]", self)
         result = fn(self._state.value)
-        p: Pipeline[U] = object.__new__(type(self))
+        p: Pipeline[U] = object.__new__(type(self))  # pyright: ignore[reportAssignmentType]
         p._state = result
         return p
 
     def map[U](self, fn: Callable[[T], U]) -> "Pipeline[U]":
         if isinstance(self._state, Err):
             return cast("Pipeline[U]", self)
-        p: Pipeline[U] = object.__new__(type(self))
+        p: Pipeline[U] = object.__new__(type(self))  # pyright: ignore[reportAssignmentType]
         p._state = Ok(fn(self._state.value))
         return p
 
