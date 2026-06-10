@@ -123,3 +123,34 @@ def test_pipeline_error_message_matches_exception_str() -> None:
         Pipeline(1).then(always_err).run()
 
     assert str(exc_info.value) == "oops"
+
+
+def test_result_returns_ok_on_success() -> None:
+    assert Pipeline(42).result() == Ok(42)
+
+
+def test_result_returns_err_on_failure() -> None:
+    def always_err(x: int) -> Err: return Err("stop")
+    assert Pipeline(1).then(always_err).result() == Err("stop")
+
+
+def test_result_enables_sub_pipeline_as_step() -> None:
+    def double(x: int) -> Ok[int]: return Ok(x * 2)
+    def add_one(x: int) -> Ok[int]: return Ok(x + 1)
+
+    def sub_step(x: int) -> Ok[int] | Err:
+        return Pipeline(x).then(double).then(add_one).result()
+
+    assert Pipeline(3).then(sub_step).run() == 7
+
+
+def test_result_sub_pipeline_err_propagates() -> None:
+    def always_err(x: int) -> Err: return Err("inner failure")
+
+    def sub_step(x: int) -> Ok[int] | Err:
+        return Pipeline(x).then(always_err).result()
+
+    with pytest.raises(MayhapsError) as exc_info:
+        Pipeline(1).then(sub_step).run()
+
+    assert exc_info.value.detail == "inner failure"
