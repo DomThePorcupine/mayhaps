@@ -1,33 +1,22 @@
-from dataclasses import dataclass
-from typing import Callable, cast
-
 from fastapi import HTTPException
 
+from mayhaps.pipeline import Pipeline
+from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok
 
-@dataclass
-class Ok[T]:
-    value: T
+__all__ = ["DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err"]
+
+_DB_STATUS_MAP: dict[DbErrKind, int] = {
+    DbErrKind.NOT_FOUND: 404,
+    DbErrKind.CONFLICT: 409,
+    DbErrKind.PERMISSION_DENIED: 403,
+    DbErrKind.INVALID: 422,
+}
 
 
-@dataclass
-class Err:
-    status: int
-    detail: str
-
-
-class Pipeline[T]:
-    def __init__(self, value: T) -> None:
-        self._state: Ok[T] | Err = Ok(value)
-
-    def then[U](self, fn: Callable[[T], Ok[U] | Err]) -> "Pipeline[U]":
-        if isinstance(self._state, Err):
-            return cast("Pipeline[U]", self)
-        result = fn(self._state.value)
-        p: Pipeline[U] = object.__new__(Pipeline)
-        p._state = result
-        return p
-
-    def run(self) -> T:
-        if isinstance(self._state, Err):
-            raise HTTPException(status_code=self._state.status, detail=self._state.detail)
-        return self._state.value
+class HttpPipeline[T](Pipeline[T]):
+    def _make_error(self, err: Err) -> Exception:
+        if isinstance(err, HttpErr):
+            return HTTPException(status_code=err.status, detail=err.detail)
+        if isinstance(err, DbErr):
+            return HTTPException(status_code=_DB_STATUS_MAP.get(err.kind, 500), detail=err.detail)
+        return HTTPException(status_code=500, detail=err.detail)

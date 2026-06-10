@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from mayhaps.fastapi import Err, Ok, Pipeline
+from mayhaps.fastapi import HttpErr, HttpPipeline, Ok
 
 
 # --- domain models -----------------------------------------------------------
@@ -37,29 +37,29 @@ PROFILES: dict[int, Profile] = {
 
 # --- pipeline steps ----------------------------------------------------------
 
-def fetch_user(user_id: int) -> Ok[User] | Err:
+def fetch_user(user_id: int) -> Ok[User] | HttpErr:
     user = USERS.get(user_id)
-    return Ok(user) if user else Err(404, "User not found")
+    return Ok(user) if user else HttpErr("User not found", status=404)
 
 
-def check_org(user: User) -> Ok[User] | Err:
-    return Ok(user) if user.org_id == 10 else Err(403, "Access denied")
+def check_org(user: User) -> Ok[User] | HttpErr:
+    return Ok(user) if user.org_id == 10 else HttpErr("Access denied", status=403)
 
 
-def check_active(user: User) -> Ok[User] | Err:
-    return Ok(user) if user.is_active else Err(422, "User is deactivated")
+def check_active(user: User) -> Ok[User] | HttpErr:
+    return Ok(user) if user.is_active else HttpErr("User is deactivated", status=422)
 
 
-def fetch_profile(user: User) -> Ok[Profile] | Err:
+def fetch_profile(user: User) -> Ok[Profile] | HttpErr:
     profile = PROFILES.get(user.id)
-    return Ok(profile) if profile else Err(404, "Profile not found")
+    return Ok(profile) if profile else HttpErr("Profile not found", status=404)
 
 
-def exploding_step(user: User) -> Ok[User] | Err:
+def exploding_step(user: User) -> Ok[User] | HttpErr:
     raise RuntimeError("database connection lost")
 
 
-def http_exception_step(user: User) -> Ok[User] | Err:
+def http_exception_step(user: User) -> Ok[User] | HttpErr:
     raise HTTPException(status_code=503, detail="upstream unavailable")
 
 
@@ -71,7 +71,7 @@ app = FastAPI()
 @app.get("/users/{user_id}")
 def get_user(user_id: int) -> dict[str, int | str]:
     user = (
-        Pipeline(user_id)
+        HttpPipeline(user_id)
         .then(fetch_user)
         .then(check_org)
         .then(check_active)
@@ -83,7 +83,7 @@ def get_user(user_id: int) -> dict[str, int | str]:
 @app.get("/users/{user_id}/profile")
 def get_user_profile(user_id: int) -> dict[str, str]:
     profile = (
-        Pipeline(user_id)
+        HttpPipeline(user_id)
         .then(fetch_user)
         .then(check_org)
         .then(check_active)
@@ -96,7 +96,7 @@ def get_user_profile(user_id: int) -> dict[str, str]:
 @app.get("/users/{user_id}/explode")
 def get_user_explode(user_id: int) -> dict[str, int]:
     result = (
-        Pipeline(user_id)
+        HttpPipeline(user_id)
         .then(fetch_user)
         .then(exploding_step)
         .run()
@@ -107,7 +107,7 @@ def get_user_explode(user_id: int) -> dict[str, int]:
 @app.get("/users/{user_id}/http-exception")
 def get_user_http_exception(user_id: int) -> dict[str, int]:
     result = (
-        Pipeline(user_id)
+        HttpPipeline(user_id)
         .then(fetch_user)
         .then(http_exception_step)
         .run()
