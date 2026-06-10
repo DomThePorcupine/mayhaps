@@ -87,6 +87,35 @@ def test_map_chains_with_then() -> None:
     assert Pipeline(3).then(double).map(str).run() == "6"
 
 
+def test_tap_runs_side_effect() -> None:
+    seen: list[int] = []
+    assert Pipeline(42).tap(seen.append).run() == 42
+    assert seen == [42]
+
+
+def test_tap_skips_on_err() -> None:
+    called = False
+
+    def always_err(x: int) -> Err: return Err("stop")
+    def side_effect(x: int) -> None:
+        nonlocal called
+        called = True
+
+    with pytest.raises(MayhapsError):
+        Pipeline(1).then(always_err).tap(side_effect).run()
+
+    assert not called
+
+
+def test_tap_chains_with_then_and_map() -> None:
+    seen: list[int] = []
+
+    def double(x: int) -> Ok[int]: return Ok(x * 2)
+
+    assert Pipeline(3).then(double).tap(seen.append).map(str).run() == "6"
+    assert seen == [6]
+
+
 def test_pipeline_error_message_matches_exception_str() -> None:
     def always_err(x: int) -> Err: return Err("oops")
 
