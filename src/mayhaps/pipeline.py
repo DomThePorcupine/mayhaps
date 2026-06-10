@@ -20,6 +20,13 @@ class Pipeline[T]:
         p._state = result
         return p
 
+    def map[U](self, fn: Callable[[T], U]) -> "Pipeline[U]":
+        if isinstance(self._state, Err):
+            return cast("Pipeline[U]", self)
+        p: Pipeline[U] = object.__new__(type(self))
+        p._state = Ok(fn(self._state.value))
+        return p
+
     def run(self) -> T:
         if isinstance(self._state, Err):
             raise self._make_error(self._state)

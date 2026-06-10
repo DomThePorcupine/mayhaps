@@ -58,6 +58,35 @@ def test_pipeline_threads_different_types() -> None:
     assert Pipeline(42).then(to_str).then(append_bang).run() == "42!"
 
 
+def test_map_transforms_value() -> None:
+    assert Pipeline(21).map(lambda x: x * 2).run() == 42
+
+
+def test_map_changes_type() -> None:
+    assert Pipeline(42).map(str).run() == "42"
+
+
+def test_map_skips_on_err() -> None:
+    called = False
+
+    def always_err(x: int) -> Err: return Err("stop")
+    def side_effect(x: int) -> str:
+        nonlocal called
+        called = True
+        return str(x)
+
+    with pytest.raises(MayhapsError):
+        Pipeline(1).then(always_err).map(side_effect).run()
+
+    assert not called
+
+
+def test_map_chains_with_then() -> None:
+    def double(x: int) -> Ok[int]: return Ok(x * 2)
+
+    assert Pipeline(3).then(double).map(str).run() == "6"
+
+
 def test_pipeline_error_message_matches_exception_str() -> None:
     def always_err(x: int) -> Err: return Err("oops")
 

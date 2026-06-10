@@ -19,8 +19,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 
 from mayhaps import Ok
 from mayhaps.fastapi import HttpPipeline
-from mayhaps.result import DbErrKind
-from mayhaps.sqlalchemy import fetch_by_id, require, require_absent, save
+from mayhaps.result import DbErr, DbErrKind
+from mayhaps.sqlalchemy import fetch_by_id, require_absent, save
 
 app = FastAPI()
 
@@ -77,39 +77,37 @@ class RenameRequest:
 
 # --- reusable steps ----------------------------------------------------------
 
-check_active = require(
-    lambda u: u.is_active,
-    kind=DbErrKind.INVALID,
-    detail="User is deactivated",
-)
+def check_active(user: User) -> Ok[User] | DbErr:
+    return Ok(user) if user.is_active else DbErr("User is deactivated", kind=DbErrKind.INVALID)
+
+
+def to_user_out(user: User) -> UserOut:
+    return UserOut(id=user.id, name=user.name, email=user.email)
 
 
 # --- routes ------------------------------------------------------------------
 
 @app.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
-    # DbErr(NOT_FOUND) → 404, DbErr(INVALID) → 422 — no explicit status anywhere
-    user = (
+    return (
         HttpPipeline(user_id)
         .then(fetch_by_id(User, db))
         .then(check_active)
+        .map(to_user_out)
         .run()
     )
-    return UserOut(id=user.id, name=user.name, email=user.email)
 
 
 @app.post("/users", response_model=UserOut, status_code=201)
 def register_user(body: RegisterRequest, db: Session = Depends(get_db)) -> UserOut:
-    # require_absent → DbErr(CONFLICT) → 409
-    # save also catches concurrent IntegrityError → DbErr(CONFLICT) → 409
-    user = (
+    return (
         HttpPipeline(body.email)
         .then(require_absent(User, db, User.email, detail="Email already registered"))
-        .then(lambda email: Ok(User(name=body.name, email=email, is_active=True)))
+        .map(lambda email: User(name=body.name, email=email, is_active=True))
         .then(save(db, conflict_detail="Email already registered"))
+        .map(to_user_out)
         .run()
     )
-    return UserOut(id=user.id, name=user.name, email=user.email)
 
 
 @app.patch("/users/{user_id}/name", response_model=UserOut)
@@ -118,12 +116,12 @@ def rename_user(user_id: int, body: RenameRequest, db: Session = Depends(get_db)
         user.name = body.name
         return Ok(user)
 
-    user = (
+    return (
         HttpPipeline(user_id)
         .then(fetch_by_id(User, db))
         .then(check_active)
         .then(apply_rename)
         .then(save(db))
+        .map(to_user_out)
         .run()
     )
-    return UserOut(id=user.id, name=user.name, email=user.email)
