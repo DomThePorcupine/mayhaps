@@ -9,12 +9,17 @@ authors = [
 requires-python = ">=3.13"
 dependencies = []
 
+[project.optional-dependencies]
+fastapi = ["fastapi>=0.100.0"]
+
 [build-system]
 requires = ["uv_build>=0.11.11,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.136.3",
+    "httpx2>=2.3.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
 ]
