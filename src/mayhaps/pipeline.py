@@ -33,6 +33,9 @@ class Pipeline[T]:
         p._state = Ok(fn(self._state.value))
         return p
 
+    def result(self) -> Ok[T] | Err:
+        return self._state
+
     def run(self) -> T:
         if isinstance(self._state, Err):
             raise self._make_error(self._state)
