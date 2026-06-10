@@ -1,12 +1,12 @@
 """
-Integration tests for mayhaps.fastapi.Pipeline against a real FastAPI app.
+Integration tests for mayhaps.fastapi.HttpPipeline against a real FastAPI app.
 
-Covers happy paths, each Err status code, short-circuit behaviour, and
+Covers happy paths, each HttpErr status code, short-circuit behaviour, and
 exception edge cases (unexpected raises, HTTPException raised directly inside
-a step, steps returning malformed values).
+a step).
 """
 
-from mayhaps.fastapi import Err, Ok, Pipeline
+from mayhaps.fastapi import HttpErr, HttpPipeline, Ok
 
 from .server import USERS, User, app, client
 
@@ -25,7 +25,7 @@ def test_get_profile_returns_200() -> None:
     assert response.json() == {"bio": "Engineer"}
 
 
-# --- Err status codes --------------------------------------------------------
+# --- HttpErr status codes ----------------------------------------------------
 
 def test_user_not_found_returns_404() -> None:
     response = client.get("/users/999")
@@ -62,15 +62,15 @@ def test_short_circuit_does_not_call_later_steps() -> None:
 
     @app.get("/short-circuit-test")
     def short_circuit_route() -> dict[str, str]:
-        def step_a(x: int) -> Ok[int] | Err:
+        def step_a(x: int) -> Ok[int] | HttpErr:
             called.append("a")
-            return Err(404, "stop here")
+            return HttpErr("stop here", status=404)
 
-        def step_b(x: int) -> Ok[int] | Err:
+        def step_b(x: int) -> Ok[int] | HttpErr:
             called.append("b")
             return Ok(x)
 
-        Pipeline(1).then(step_a).then(step_b).run()
+        HttpPipeline(1).then(step_a).then(step_b).run()
         return {}
 
     client.get("/short-circuit-test")
@@ -99,13 +99,13 @@ def test_http_exception_raised_directly_in_step_is_respected() -> None:
     assert response.json()["detail"] == "upstream unavailable"
 
 
-def test_err_with_arbitrary_status_code_is_forwarded() -> None:
+def test_http_err_with_arbitrary_status_code_is_forwarded() -> None:
     @app.get("/teapot")
     def teapot_route() -> dict[str, str]:
-        def brew(x: int) -> Ok[int] | Err:
-            return Err(418, "I'm a teapot")
+        def brew(x: int) -> Ok[int] | HttpErr:
+            return HttpErr("I'm a teapot", status=418)
 
-        Pipeline(1).then(brew).run()
+        HttpPipeline(1).then(brew).run()
         return {}
 
     response = client.get("/teapot")

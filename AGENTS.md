@@ -7,6 +7,10 @@
 ## Key files
 
 - `src/mayhaps/compose.py` — core `compose` function
+- `src/mayhaps/result.py` — `Ok[T]`, `Err`, `HttpErr`, `MayhapsError`
+- `src/mayhaps/pipeline.py` — core `Pipeline[T]` (raises `MayhapsError`)
+- `src/mayhaps/fastapi/__init__.py` — `HttpPipeline[T]` (raises `HTTPException`), re-exports `Ok`, `Err`, `HttpErr`
+- `src/mayhaps/sqlalchemy/__init__.py` — step factories: `fetch_by_id`, `fetch_by`, `require`, `require_absent`, `save`
 - `src/mayhaps/converters.py` — type coercions and formatting (`to_int`, `to_float`, `to_str`, `to_percent`)
 - `src/mayhaps/numeric.py` — numeric guards (`positive`, `non_negative`, `clamp`)
 - `src/mayhaps/strings.py` — string validators (`non_empty`, `strip`, `matches`)
@@ -33,10 +37,15 @@ def compose(param: T | None, *dependencies: Callable[[T], T | None]) -> T | None
 Tests use `pytest` and are organized one file per module:
 
 - `tests/test_compose.py`
+- `tests/test_pipeline.py`
 - `tests/test_converters.py`
 - `tests/test_numeric.py`
 - `tests/test_strings.py`
 - `tests/test_predicates.py`
+- `tests/fastapi/test_pipeline.py`
+- `tests/fastapi/test_integration.py`
+- `tests/sqlalchemy/test_helpers.py`
+- `tests/sqlalchemy/test_integration.py`
 
 Run them with:
 

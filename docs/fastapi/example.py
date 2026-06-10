@@ -1,5 +1,5 @@
 """
-Example FastAPI server demonstrating mayhaps.fastapi.Pipeline.
+Example FastAPI server demonstrating mayhaps.fastapi.HttpPipeline.
 
 Run with:
     uvicorn docs.fastapi.example:app --reload
@@ -9,11 +9,11 @@ Endpoints:
     GET /users/{user_id}/posts   — fetch a user's published posts
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from fastapi import FastAPI
 
-from mayhaps.fastapi import Err, Ok, Pipeline
+from mayhaps.fastapi import HttpErr, HttpPipeline, Ok
 
 app = FastAPI()
 
@@ -88,30 +88,30 @@ CURRENT_ORG_ID = 10
 
 # --- pipeline steps ----------------------------------------------------------
 
-def fetch_user(user_id: int) -> Ok[User] | Err:
+def fetch_user(user_id: int) -> Ok[User] | HttpErr:
     user = USERS.get(user_id)
-    return Ok(user) if user else Err(404, "User not found")
+    return Ok(user) if user else HttpErr("User not found", status=404)
 
 
-def check_org(user: User) -> Ok[User] | Err:
-    return Ok(user) if user.org_id == CURRENT_ORG_ID else Err(403, "Access denied")
+def check_org(user: User) -> Ok[User] | HttpErr:
+    return Ok(user) if user.org_id == CURRENT_ORG_ID else HttpErr("Access denied", status=403)
 
 
-def check_active(user: User) -> Ok[User] | Err:
-    return Ok(user) if user.is_active else Err(422, "User is deactivated")
+def check_active(user: User) -> Ok[User] | HttpErr:
+    return Ok(user) if user.is_active else HttpErr("User is deactivated", status=422)
 
 
-def fetch_profile(user: User) -> Ok[Profile] | Err:
+def fetch_profile(user: User) -> Ok[Profile] | HttpErr:
     profile = PROFILES.get(user.id)
-    return Ok(profile) if profile else Err(404, "Profile not found")
+    return Ok(profile) if profile else HttpErr("Profile not found", status=404)
 
 
-def to_user_response(profile: Profile) -> Ok[UserResponse] | Err:
+def to_user_response(profile: Profile) -> Ok[UserResponse] | HttpErr:
     user = USERS[profile.user_id]
     return Ok(UserResponse(id=user.id, name=user.name, avatar_url=profile.avatar_url))
 
 
-def fetch_published_posts(user: User) -> Ok[UserPostsResponse] | Err:
+def fetch_published_posts(user: User) -> Ok[UserPostsResponse] | HttpErr:
     all_posts = POSTS.get(user.id, [])
     published = [PostSummary(id=p.id, title=p.title) for p in all_posts if p.published]
     return Ok(UserPostsResponse(user=user.name, posts=published))
@@ -122,16 +122,11 @@ def fetch_published_posts(user: User) -> Ok[UserPostsResponse] | Err:
 @app.get("/users/{user_id}", response_model=UserResponse)
 def get_user(user_id: int) -> UserResponse:
     return (
-        Pipeline(user_id)
-        # int -> User
+        HttpPipeline(user_id)
         .then(fetch_user)
-        # User -> User
         .then(check_org)
-        # User -> User
         .then(check_active)
-        # User -> Profile
         .then(fetch_profile)
-        # Profile -> UserResponse
         .then(to_user_response)
         .run()
     )
@@ -140,7 +135,7 @@ def get_user(user_id: int) -> UserResponse:
 @app.get("/users/{user_id}/posts", response_model=UserPostsResponse)
 def get_user_posts(user_id: int) -> UserPostsResponse:
     return (
-        Pipeline(user_id)
+        HttpPipeline(user_id)
         .then(fetch_user)
         .then(check_org)
         .then(check_active)
