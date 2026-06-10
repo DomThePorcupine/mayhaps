@@ -102,13 +102,12 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
         .run()
     )
 
-
 @app.post("/users", response_model=UserOut, status_code=201)
 def register_user(body: RegisterRequest, db: Session = Depends(get_db)) -> UserOut:
     return (
         HttpPipeline(body.email)
         .then(require_absent(User, db, User.email, detail="Email already registered"))
-        .map(lambda email: User(name=body.name, email=email, is_active=True))
+        .map(lambda e: User(name=body.name, email=e, is_active=True))
         .then(save(db, conflict_detail="Email already registered"))
         .map(to_user_out)
         .run()

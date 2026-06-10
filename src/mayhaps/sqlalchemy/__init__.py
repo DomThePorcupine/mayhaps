@@ -46,18 +46,18 @@ def require[M](
     return step
 
 
-def require_absent(
+def require_absent[V](
     model: type,
     session: Session,
     column: Any,
     *,
     detail: str | None = None,
-) -> Callable[[Any], Ok[Any] | DbErr]:
+) -> Callable[[V], Ok[V] | DbErr]:
     """Step factory: pass through if no row matches column == value, otherwise short-circuit.
 
     Useful for uniqueness checks before creating a record.
     """
-    def step(value: Any) -> Ok[Any] | DbErr:
+    def step(value: V) -> Ok[V] | DbErr:
         exists = session.scalars(select(model).where(column == value)).first()
         return DbErr(detail or "Already exists", kind=DbErrKind.CONFLICT) if exists is not None else Ok(value)
     return step

@@ -1,4 +1,3 @@
-import pytest
 from sqlalchemy.orm import Session
 
 from mayhaps.result import DbErr, DbErrKind, Ok
@@ -44,17 +43,23 @@ def test_fetch_by_custom_detail(session: Session) -> None:
 # --- require -----------------------------------------------------------------
 
 def test_require_passes_through_when_predicate_holds(session: Session, alice: User) -> None:
-    step = require(lambda u: u.is_active, kind=DbErrKind.INVALID, detail="Inactive")
+    def is_active(u: User) -> bool:
+        return u.is_active
+    step = require(is_active, kind=DbErrKind.INVALID, detail="Inactive")
     assert step(alice) == Ok(alice)
 
 
 def test_require_returns_err_when_predicate_fails(session: Session, bob: User) -> None:
-    step = require(lambda u: u.is_active, kind=DbErrKind.INVALID, detail="User is deactivated")
+    def is_active(u: User) -> bool:
+        return u.is_active
+    step = require(is_active, kind=DbErrKind.INVALID, detail="User is deactivated")
     assert step(bob) == DbErr("User is deactivated", kind=DbErrKind.INVALID)
 
 
 def test_require_uses_provided_kind(session: Session, alice: User) -> None:
-    step = require(lambda u: u.name == "Carol", kind=DbErrKind.PERMISSION_DENIED, detail="Wrong user")
+    def is_carol(u: User) -> bool:
+        return u.name == "Carol"
+    step = require(is_carol, kind=DbErrKind.PERMISSION_DENIED, detail="Wrong user")
     result = step(alice)
     assert result == DbErr("Wrong user", kind=DbErrKind.PERMISSION_DENIED)
 
