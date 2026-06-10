@@ -42,6 +42,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(200), unique=True)
     is_active: Mapped[bool] = mapped_column(default=True)
 
+    def __init__(self, name: str, email: str, is_active: bool = True):
+        self.name = name
+        self.email = email
+        self.is_active = is_active
+
 
 Base.metadata.create_all(engine)
 
