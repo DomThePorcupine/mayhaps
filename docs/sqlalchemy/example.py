@@ -114,12 +114,16 @@ def register_user(body: RegisterRequest, db: Session = Depends(get_db)) -> UserO
 
 @app.patch("/users/{user_id}/name", response_model=UserOut)
 def rename_user(user_id: int, body: RenameRequest, db: Session = Depends(get_db)) -> UserOut:
+    def apply_rename(user: User) -> Ok[User]:
+        user.name = body.name
+        return Ok(user)
+
     user = (
         HttpPipeline(user_id)
         .then(fetch_by_id(User, db))
         .then(check_active)
+        .then(apply_rename)
+        .then(save(db))
         .run()
     )
-    user.name = body.name
-    db.flush()
     return UserOut(id=user.id, name=user.name, email=user.email)
