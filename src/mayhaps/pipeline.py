@@ -20,6 +20,12 @@ class Pipeline[T]:
         p._state = result
         return p
 
+    def tap(self, fn: Callable[[T], None]) -> "Pipeline[T]":
+        if isinstance(self._state, Err):
+            return self
+        fn(self._state.value)
+        return self
+
     def map[U](self, fn: Callable[[T], U]) -> "Pipeline[U]":
         if isinstance(self._state, Err):
             return cast("Pipeline[U]", self)
