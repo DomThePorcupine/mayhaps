@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from mayhaps.result import DbErr, DbErrKind, Ok
-from mayhaps.sqlalchemy import fetch_by, fetch_by_id, require, require_absent, save
+from mayhaps.sqlalchemy import fetch_by, fetch_by_id, flush, require, require_absent, save
 
 from .db import User, alice, bob, session  # noqa: F401
 
@@ -79,6 +79,20 @@ def test_require_absent_returns_conflict_err_when_exists(session: Session, alice
 def test_require_absent_custom_detail(session: Session, alice: User) -> None:
     result = require_absent(User, session, User.email, detail="Email taken")(alice.email)
     assert result == DbErr("Email taken", kind=DbErrKind.CONFLICT)
+
+
+# --- flush -------------------------------------------------------------------
+
+def test_flush_passes_through_object(session: Session, alice: User) -> None:
+    result = flush(session)(alice)
+    assert result == Ok(alice)
+
+
+def test_flush_persists_mutations(session: Session, alice: User) -> None:
+    alice.name = "Updated"
+    flush(session)(alice)
+    session.expire(alice)
+    assert alice.name == "Updated"
 
 
 # --- save --------------------------------------------------------------------
