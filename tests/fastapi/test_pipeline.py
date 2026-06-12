@@ -83,6 +83,25 @@ def test_pipeline_converts_db_err_using_status_map() -> None:
         assert exc_info.value.status_code == expected_status
 
 
+def test_require_plain_string_raises_400() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        HttpPipeline(0).require(lambda x: x > 0, "must be positive").run()
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "must be positive"
+
+
+def test_require_http_err_uses_provided_status() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        HttpPipeline(0).require(lambda x: x > 0, HttpErr("forbidden", status=403)).run()
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "forbidden"
+
+
+def test_require_passes_through_when_predicate_holds() -> None:
+    result = HttpPipeline(5).require(lambda x: x > 0, "must be positive").run()
+    assert result == 5
+
+
 def test_pipeline_threads_different_types() -> None:
     def to_str(x: int) -> Ok[str]: return Ok(str(x))
     def append_bang(x: str) -> Ok[str]: return Ok(x + "!")
