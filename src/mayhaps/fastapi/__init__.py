@@ -1,3 +1,5 @@
+from typing import Callable, cast
+
 from fastapi import HTTPException
 
 from mayhaps.pipeline import Pipeline
@@ -20,3 +22,9 @@ class HttpPipeline[T](Pipeline[T]):
         if isinstance(err, DbErr):
             return HTTPException(status_code=_DB_STATUS_MAP.get(err.kind, 500), detail=err.detail)
         return HTTPException(status_code=500, detail=err.detail)
+
+    def require(  # type: ignore[override]  # intentional: HttpPipeline narrows err to its own domain
+        self, predicate: Callable[[T], bool], err: str | HttpErr
+    ) -> "HttpPipeline[T]":
+        resolved = HttpErr(err, status=400) if isinstance(err, str) else err
+        return cast("HttpPipeline[T]", super().require(predicate, resolved))

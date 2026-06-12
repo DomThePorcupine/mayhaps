@@ -1,4 +1,5 @@
 from typing import Any, Callable
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -6,15 +7,17 @@ from sqlalchemy.orm import Session
 
 from mayhaps.result import DbErr, DbErrKind, Ok
 
+type PrimaryKey = int | str | UUID
+
 
 def fetch_by_id[M](
     model: type[M],
     session: Session,
     *,
     detail: str | None = None,
-) -> Callable[[int], Ok[M] | DbErr]:
+) -> Callable[[PrimaryKey], Ok[M] | DbErr]:
     """Step factory: look up a row by primary key."""
-    def step(pk: int) -> Ok[M] | DbErr:
+    def step(pk: PrimaryKey) -> Ok[M] | DbErr:
         instance = session.get(model, pk)
         return Ok(instance) if instance is not None else DbErr(detail or f"{model.__name__} not found", kind=DbErrKind.NOT_FOUND)
     return step
@@ -60,6 +63,14 @@ def require_absent[V](
     def step(value: V) -> Ok[V] | DbErr:
         exists = session.scalars(select(model).where(column == value)).first()
         return DbErr(detail or "Already exists", kind=DbErrKind.CONFLICT) if exists is not None else Ok(value)
+    return step
+
+
+def flush[M](session: Session) -> Callable[[M], Ok[M]]:
+    """Step factory: flush pending changes, passing the object through."""
+    def step(obj: M) -> Ok[M]:
+        session.flush()
+        return Ok(obj)
     return step
 
 
