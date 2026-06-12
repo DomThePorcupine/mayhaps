@@ -20,6 +20,13 @@ class Pipeline[T]:
         p._state = result
         return p
 
+    def require(self, predicate: Callable[[T], bool], err: Err) -> "Pipeline[T]":
+        if isinstance(self._state, Err):
+            return self
+        p: Pipeline[T] = object.__new__(type(self))  # pyright: ignore[reportAssignmentType]
+        p._state = self._state if predicate(self._state.value) else err
+        return p
+
     def tap(self, fn: Callable[[T], None]) -> "Pipeline[T]":
         if isinstance(self._state, Err):
             return self

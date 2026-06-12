@@ -144,6 +144,38 @@ def test_result_enables_sub_pipeline_as_step() -> None:
     assert Pipeline(3).then(sub_step).run() == 7
 
 
+def test_require_passes_through_when_predicate_holds() -> None:
+    assert Pipeline(4).require(lambda x: x % 2 == 0, Err("must be even")).run() == 4
+
+
+def test_require_short_circuits_when_predicate_fails() -> None:
+    with pytest.raises(MayhapsError) as exc_info:
+        Pipeline(3).require(lambda x: x % 2 == 0, Err("must be even")).run()
+    assert exc_info.value.detail == "must be even"
+
+
+def test_require_skips_on_prior_err() -> None:
+    called = False
+
+    def always_err(x: int) -> Err: return Err("stop")
+    def side_effect(x: int) -> bool:
+        nonlocal called
+        called = True
+        return True
+
+    with pytest.raises(MayhapsError):
+        Pipeline(1).then(always_err).require(side_effect, Err("never")).run()
+
+    assert not called
+
+
+def test_require_preserves_http_err_subtype() -> None:
+    err = HttpErr("forbidden", status=403)
+    with pytest.raises(MayhapsError) as exc_info:
+        Pipeline(1).require(lambda x: x > 10, err).run()
+    assert exc_info.value.status == 403
+
+
 def test_result_sub_pipeline_err_propagates() -> None:
     def always_err(x: int) -> Err: return Err("inner failure")
 
