@@ -1,7 +1,9 @@
 import inspect
-from typing import Any, Awaitable, Callable, cast
+from typing import Any, Awaitable, Callable, TypeVar, cast, overload
 
 from .result import DbErr, Err, HttpErr, MayhapsError, Ok
+
+_V = TypeVar("_V")
 
 _UNSET = object()
 
@@ -92,6 +94,15 @@ class AsyncPipeline[T]:
         """Append a plain transform; the result is wrapped in Ok automatically."""
         self._steps.append(("map", fn))
         return cast("AsyncPipeline[U]", self)
+
+    @overload
+    def ok_or(self: "AsyncPipeline[_V | None]", err: Err) -> "AsyncPipeline[_V]": ...
+    @overload
+    def ok_or(self: "AsyncPipeline[_V]", err: Err) -> "AsyncPipeline[_V]": ...
+    def ok_or(self, err: Err) -> "AsyncPipeline":
+        """Unwrap T | None → T, short-circuiting with err if the value is None."""
+        self._steps.append(("then", lambda v: Ok(v) if v is not None else err))
+        return cast("AsyncPipeline", self)
 
     # ------------------------------------------------------------------
     # Terminal methods

@@ -1,9 +1,11 @@
-from typing import Awaitable, Callable, cast, override
+from typing import Awaitable, Callable, TypeVar, cast, overload, override
 
 from fastapi import HTTPException
 
 from mayhaps.async_pipeline import AsyncPipeline
 from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok
+
+_V = TypeVar("_V")
 
 _DB_STATUS_MAP: dict[DbErrKind, int] = {
     DbErrKind.NOT_FOUND: 404,
@@ -65,6 +67,14 @@ class AsyncHttpPipeline[T](AsyncPipeline[T]):
     def map[U](self, fn: Callable[[T], U]) -> "AsyncHttpPipeline[U]":
         """Append a plain transform; the result is wrapped in Ok automatically."""
         return cast("AsyncHttpPipeline[U]", super().map(fn))
+
+    @overload  # type: ignore[override]
+    def ok_or(self: "AsyncHttpPipeline[_V | None]", err: Err) -> "AsyncHttpPipeline[_V]": ...
+    @overload
+    def ok_or(self: "AsyncHttpPipeline[_V]", err: Err) -> "AsyncHttpPipeline[_V]": ...
+    def ok_or(self, err: Err) -> "AsyncHttpPipeline":
+        """Unwrap T | None → T, short-circuiting with err if the value is None."""
+        return cast("AsyncHttpPipeline", super().ok_or(err))
 
     def require(  # type: ignore[override]  # intentional: narrows err to HttpPipeline domain
         self, predicate: Callable[[T], bool], err: str | HttpErr

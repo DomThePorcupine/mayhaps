@@ -176,6 +176,46 @@ def test_require_preserves_http_err_subtype() -> None:
     assert exc_info.value.status == 403
 
 
+def test_ok_or_unwraps_non_none_value() -> None:
+    assert Pipeline("hello").ok_or(Err("missing")).run() == "hello"
+
+
+def test_ok_or_short_circuits_on_none() -> None:
+    with pytest.raises(MayhapsError) as exc_info:
+        Pipeline(None).ok_or(Err("missing")).run()
+    assert exc_info.value.detail == "missing"
+
+
+def test_ok_or_preserves_http_err_status() -> None:
+    with pytest.raises(MayhapsError) as exc_info:
+        Pipeline(None).ok_or(HttpErr("not found", status=404)).run()
+    assert exc_info.value.status == 404
+
+
+def test_ok_or_skips_on_prior_err() -> None:
+    called = False
+
+    def always_err(x: int) -> Err:
+        return Err("stop")
+
+    def side_effect(x: int) -> bool:
+        nonlocal called
+        called = True
+        return True
+
+    with pytest.raises(MayhapsError):
+        Pipeline(1).then(always_err).ok_or(Err("never")).run()
+
+    assert not called
+
+
+def test_ok_or_chains_with_subsequent_steps() -> None:
+    def append_bang(x: str) -> Ok[str]:
+        return Ok(x + "!")
+
+    assert Pipeline("hi").ok_or(Err("missing")).then(append_bang).run() == "hi!"
+
+
 def test_result_sub_pipeline_err_propagates() -> None:
     def always_err(x: int) -> Err: return Err("inner failure")
 

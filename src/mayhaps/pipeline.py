@@ -1,6 +1,8 @@
-from typing import Callable, cast
+from typing import Callable, TypeVar, cast, overload
 
 from .result import DbErr, Err, HttpErr, MayhapsError, Ok
+
+_V = TypeVar("_V")
 
 
 class Pipeline[T]:
@@ -38,6 +40,18 @@ class Pipeline[T]:
             return cast("Pipeline[U]", self)
         p: Pipeline[U] = object.__new__(type(self))  # pyright: ignore[reportAssignmentType]
         p._state = Ok(fn(self._state.value))
+        return p
+
+    @overload
+    def ok_or(self: "Pipeline[_V | None]", err: Err) -> "Pipeline[_V]": ...
+    @overload
+    def ok_or(self: "Pipeline[_V]", err: Err) -> "Pipeline[_V]": ...
+    def ok_or(self, err: Err) -> "Pipeline":
+        """Unwrap T | None → T, short-circuiting with err if the value is None."""
+        if isinstance(self._state, Err):
+            return cast("Pipeline", self)
+        p: Pipeline = object.__new__(type(self))
+        p._state = Ok(self._state.value) if self._state.value is not None else err
         return p
 
     def result(self) -> Ok[T] | Err:
