@@ -2,6 +2,6 @@ from .compose import compose
 from .pipeline import Pipeline
 from .predicates import ok_or, require_field, when
 from .result import DbErr, DbErrKind, Err, HttpErr, MayhapsError, Ok
-from . import converters, numeric, strings
+from . import converters, env, numeric, strings
 
-__all__ = ["compose", "when", "require_field", "ok_or", "converters", "numeric", "strings", "Ok", "Err", "HttpErr", "DbErr", "DbErrKind", "MayhapsError", "Pipeline"]
+__all__ = ["compose", "when", "require_field", "ok_or", "converters", "env", "numeric", "strings", "Ok", "Err", "HttpErr", "DbErr", "DbErrKind", "MayhapsError", "Pipeline"]
