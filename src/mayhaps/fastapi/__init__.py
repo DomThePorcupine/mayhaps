@@ -3,9 +3,9 @@ from typing import Callable, cast, override
 from fastapi import HTTPException
 
 from mayhaps.pipeline import Pipeline
-from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok
+from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok, ValidationErr
 
-__all__ = ["DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err"]
+__all__ = ["DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err", "ValidationErr"]
 
 _DB_STATUS_MAP: dict[DbErrKind, int] = {
     DbErrKind.NOT_FOUND: 404,
@@ -50,6 +50,8 @@ class HttpPipeline[T](Pipeline[T]):
             return HTTPException(status_code=err.status, detail=err.detail)
         if isinstance(err, DbErr):
             return HTTPException(status_code=_DB_STATUS_MAP.get(err.kind, 500), detail=err.detail)
+        if isinstance(err, ValidationErr):
+            return HTTPException(status_code=422, detail=err.detail)
         return HTTPException(status_code=500, detail=err.detail)
 
     @override

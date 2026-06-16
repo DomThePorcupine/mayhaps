@@ -29,6 +29,11 @@ class DbErr(Err):
     kind: DbErrKind = field(kw_only=True)
 
 
+@dataclass
+class ValidationErr(Err):
+    fields: list[str] = field(default_factory=list)
+
+
 class MayhapsError(Exception):
     def __init__(self, detail: str, *, status: int | None = None, kind: DbErrKind | None = None) -> None:
         self.detail = detail

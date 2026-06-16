@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from mayhaps.pipeline import Pipeline
 from mayhaps.pydantic import parse
-from mayhaps.result import Err, Ok
+from mayhaps.result import Err, Ok, ValidationErr
 
 
 class User(BaseModel):
@@ -13,29 +13,64 @@ class User(BaseModel):
 # --- parse (direct step) -----------------------------------------------------
 
 def test_parse_returns_ok_on_valid_data() -> None:
-    step = parse(User)
-    result = step({"name": "Alice", "age": 30})
+    result = parse(User)({"name": "Alice", "age": 30})
     assert result == Ok(User(name="Alice", age=30))
 
 
-def test_parse_returns_err_on_missing_field() -> None:
-    step = parse(User)
-    result = step({"name": "Alice"})
-    assert isinstance(result, Err)
+def test_parse_returns_validation_err_on_missing_field() -> None:
+    result = parse(User)({"name": "Alice"})
+    assert isinstance(result, ValidationErr)
     assert "age" in result.detail
+    assert "age" in result.fields
 
 
-def test_parse_returns_err_on_wrong_type() -> None:
-    step = parse(User)
-    result = step({"name": "Alice", "age": "not-a-number"})
-    assert isinstance(result, Err)
+def test_parse_returns_validation_err_on_wrong_type() -> None:
+    result = parse(User)({"name": "Alice", "age": "not-a-number"})
+    assert isinstance(result, ValidationErr)
     assert "age" in result.detail
+    assert "age" in result.fields
 
 
-def test_parse_returns_err_on_empty_dict() -> None:
-    step = parse(User)
-    result = step({})
+def test_parse_returns_validation_err_on_empty_dict() -> None:
+    result = parse(User)({})
+    assert isinstance(result, ValidationErr)
+    assert result.fields  # at least one field reported
+
+
+def test_validation_err_is_subtype_of_err() -> None:
+    result = parse(User)({})
     assert isinstance(result, Err)
+
+
+# --- fields list -------------------------------------------------------------
+
+def test_fields_contains_all_failing_paths() -> None:
+    class Full(BaseModel):
+        x: int
+        y: int
+        z: int
+
+    result = parse(Full)({})
+    assert isinstance(result, ValidationErr)
+    assert set(result.fields) == {"x", "y", "z"}
+
+
+def test_fields_empty_on_success() -> None:
+    result = parse(User)({"name": "Bob", "age": 25})
+    assert isinstance(result, Ok)
+
+
+def test_nested_field_path() -> None:
+    class Address(BaseModel):
+        city: str
+
+    class Person(BaseModel):
+        name: str
+        address: Address
+
+    result = parse(Person)({"name": "Alice", "address": {}})
+    assert isinstance(result, ValidationErr)
+    assert any("address" in f for f in result.fields)
 
 
 # --- integration with Pipeline.then() ----------------------------------------
@@ -45,14 +80,13 @@ def test_pipeline_parse_success() -> None:
     assert value == User(name="Alice", age=30)
 
 
-def test_pipeline_parse_failure_short_circuits() -> None:
+def test_pipeline_parse_failure_returns_validation_err() -> None:
     result = Pipeline({"name": "Alice"}).then(parse(User)).result()
-    assert isinstance(result, Err)
-    assert "age" in result.detail
+    assert isinstance(result, ValidationErr)
+    assert "age" in result.fields
 
 
 def test_pipeline_short_circuits_before_parse() -> None:
-    """If the pipeline already holds an Err, parse is never called."""
     called = False
 
     def never_called(data: dict) -> Ok[User] | Err:
@@ -72,25 +106,10 @@ def test_pipeline_short_circuits_before_parse() -> None:
 
 
 def test_pipeline_chained_after_parse() -> None:
-    """Successful parse can be followed by further pipeline steps."""
     result = (
-        Pipeline({"name": "  Alice  ", "age": 42})
+        Pipeline({"name": "Alice", "age": 42})
         .then(parse(User))
-        .map(lambda u: u.name.strip())
+        .map(lambda u: u.name)
         .result()
     )
-    assert result == Ok("  Alice  ".strip())
-
-
-# --- error message format ----------------------------------------------------
-
-def test_err_detail_contains_all_missing_fields() -> None:
-    class Full(BaseModel):
-        x: int
-        y: int
-        z: int
-
-    result = parse(Full)({})
-    assert isinstance(result, Err)
-    for field in ("x", "y", "z"):
-        assert field in result.detail
+    assert result == Ok("Alice")
