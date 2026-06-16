@@ -107,3 +107,21 @@ def test_pipeline_threads_different_types() -> None:
     def append_bang(x: str) -> Ok[str]: return Ok(x + "!")
 
     assert HttpPipeline(42).then(to_str).then(append_bang).run() == "42!"
+
+
+def test_ok_or_unwraps_non_none_value() -> None:
+    assert HttpPipeline("hello").ok_or(HttpErr("missing", status=400)).run() == "hello"
+
+
+def test_ok_or_raises_http_exception_on_none() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        HttpPipeline(None).ok_or(HttpErr("missing", status=400)).run()
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "missing"
+
+
+def test_ok_or_preserves_pipeline_type_for_chaining() -> None:
+    def append_bang(x: str) -> Ok[str]: return Ok(x + "!")
+
+    result = HttpPipeline("hi").ok_or(HttpErr("missing", status=400)).then(append_bang).run()
+    assert result == "hi!"

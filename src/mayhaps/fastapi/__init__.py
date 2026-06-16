@@ -1,10 +1,12 @@
-from typing import Callable, cast, override
+from typing import Callable, TypeVar, cast, overload, override
 
 from fastapi import HTTPException
 
 from mayhaps.fastapi.async_pipeline import AsyncHttpPipeline
 from mayhaps.pipeline import Pipeline
 from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok, ValidationErr
+
+_V = TypeVar("_V")
 
 __all__ = ["AsyncHttpPipeline", "DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err", "ValidationErr"]
 
@@ -69,6 +71,14 @@ class HttpPipeline[T](Pipeline[T]):
     def map[U](self, fn: Callable[[T], U]) -> "HttpPipeline[U]":
         """Transform the current value with a plain function that cannot fail."""
         return cast("HttpPipeline[U]", super().map(fn))
+
+    @overload  # type: ignore[override]
+    def ok_or(self: "HttpPipeline[_V | None]", err: Err) -> "HttpPipeline[_V]": ...
+    @overload
+    def ok_or(self: "HttpPipeline[_V]", err: Err) -> "HttpPipeline[_V]": ...
+    def ok_or(self, err: Err) -> "HttpPipeline":
+        """Unwrap T | None → T, short-circuiting with err if the value is None."""
+        return cast("HttpPipeline", super().ok_or(err))
 
     def require(  # type: ignore[override]  # intentional: HttpPipeline narrows err to its own domain
         self, predicate: Callable[[T], bool], err: str | HttpErr
