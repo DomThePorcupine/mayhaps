@@ -2,10 +2,11 @@ from typing import Callable, cast, override
 
 from fastapi import HTTPException
 
+from mayhaps.fastapi.async_pipeline import AsyncHttpPipeline
 from mayhaps.pipeline import Pipeline
 from mayhaps.result import DbErr, DbErrKind, Err, HttpErr, Ok, ValidationErr
 
-__all__ = ["DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err", "ValidationErr"]
+__all__ = ["AsyncHttpPipeline", "DbErr", "DbErrKind", "HttpErr", "HttpPipeline", "Ok", "Err", "ValidationErr"]
 
 _DB_STATUS_MAP: dict[DbErrKind, int] = {
     DbErrKind.NOT_FOUND: 404,
